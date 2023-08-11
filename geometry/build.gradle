@@ -1,0 +1,166 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.1.2'
+	id 'io.spring.dependency-management' version '1.1.2'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	sourceCompatibility = '17'
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	compileOnly 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	runtimeOnly 'org.postgresql:postgresql'
+	// https://mvnrepository.com/artifact/net.postgis/postgis-jdbc
+    implementation group: 'net.postgis', name: 'postgis-jdbc', version: '2021.1.0'
+	
+	annotationProcessor 'org.projectlombok:lombok'
+	// https://mvnrepository.com/artifact/org.hibernate.orm/hibernate-spatial
+    implementation group: 'org.hibernate.orm', name: 'hibernate-spatial', version: '6.3.0.CR1'
+    // https://mvnrepository.com/artifact/com.graphhopper.external/jackson-datatype-jts
+    implementation group: 'com.graphhopper.external', name: 'jackson-datatype-jts', version: '2.14'
+    // https://mvnrepository.com/artifact/org.locationtech.jts/jts-core
+    //simplementation group: 'org.locationtech.jts', name: 'jts-core', version: '1.19.0'
+    implementation 'org.locationtech.jts.io:jts-io-common:1.18.2'
+    // https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-annotations
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.13.0'
+    
+ 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+//ext {
+//    env = ''
+//}
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+//jar.archiveBaseName = getArchiveBaseName() + "_" + getTimestamp()
+//jar.archiveVersion =  project.properties['archive.version']
+
+task cleanUp(type: Delete) {
+  doFirst {
+    delete project.properties['output.jar.base.dir'] + "/"
+  }  
+}
+
+
+// 開発環境のjarファイルを作成するGradleタスク
+task buildJarForDev(type: Jar, dependsOn: 'setInfoForBuildJar') {
+    group 'build' // 既存の「Gradle タスク」タブに表示されるディレクトリ
+    description '開発環境のjarファイルを作成します。' // タスクの説明
+    
+    dependsOn 'cleanUp'
+//    from (project.properties['propertyFile.basePath']) {
+//      include project.properties['propertyFile.dev']
+//    }
+    //bootJar.systemProperties=project.properties['propertyFile.dev']
+    //bootJar.systemProperty 'spring.profiles.active', 'dev'
+    doLast {
+      setEnvironment(project.properties['output.jar.dev'])
+    }
+    finalizedBy bootJar
+
+}
+
+// ステージング環境のjarファイルを作成するGradleタスク
+task buildJarForStg(type: Jar, dependsOn: 'setInfoForBuildJar') {
+    group 'build' // 既存の「Gradle タスク」タブに表示されるディレクトリ
+    description 'ステージング環境のjarファイルを作成します。' // タスクの説明
+
+    dependsOn 'cleanUp'
+//    from (project.properties['propertyFile.basePath']) {
+//      include project.properties['propertyFile.stg']
+//    }
+    //bootJar.systemProperties=project.properties['propertyFile.stg']
+    //bootJar.systemProperty 'spring.profiles.active', 'stg'
+    doLast {
+      setEnvironment(project.properties['output.jar.stg'])
+    }
+    finalizedBy bootJar
+
+}
+
+// 本番環境のjarファイルを作成するGradleタスク
+task buildJarForProd(type: Jar, dependsOn: 'setInfoForBuildJar') {
+    group 'build' // 既存の「Gradle タスク」タブに表示されるディレクトリ
+    description '本番環境のjarファイルを作成します。' // タスクの説明
+    
+    dependsOn 'cleanUp'
+//    from (project.properties['propertyFile.basePath']) {
+//      include project.properties['propertyFile.prod']
+//    }
+    //bootJar.systemProperties=project.properties['propertyFile.prod']
+    //bootJar.systemProperty 'spring.profiles.active', 'prod'
+    doLast {
+      setEnvironment(project.properties['output.jar.prod'])
+    }
+    finalizedBy bootJar
+
+}
+
+// 環境ごとにプロパティファイルを変更する
+def setEnvironment(env) {
+  def baseOutputDir=project.properties['output.jar.base.dir'] + "/"
+  print 'env: ' + env
+  switch (env) {
+    case 'dev': // 開発環境
+      bootJar.exclude(
+        project.properties['propertyFile.stg']
+        ,project.properties['propertyFile.prod']
+      )
+      baseOutputDir += project.properties['output.jar.dev']
+      break
+    case 'stg': // ステージング環境
+      bootJar.exclude(
+        project.properties['propertyFile.prod']
+      )
+      baseOutputDir += project.properties['output.jar.stg']
+      break
+    case 'prod': // 本番環境
+      bootJar.exclude(
+        project.properties['propertyFile.stg']
+      )
+      baseOutputDir += project.properties['output.jar.prod']
+      break
+    default:
+      break
+  }
+  bootJar.destinationDirectory=file(baseOutputDir)
+}
+
+
+task setInfoForBuildJar() {
+    doFirst {
+        bootJar.archiveBaseName = getArchiveBaseName() + "_" + getTimestamp()
+        bootJar.archiveVersion =  project.properties['archive.version']
+        bootJar.mainClass = 'com.example.demo.GeometryApplication'
+    }
+}
+
+def getArchiveBaseName() {
+  return 'gs-gradle';
+}
+
+// 現在時刻を取得する
+def getTimestamp() {
+    // 年月日_時分秒_ミリ秒
+    return new Date().format('yyyyMMdd_HHmmss_SSS')
+}
